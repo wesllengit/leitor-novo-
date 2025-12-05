@@ -38,6 +38,7 @@
     th, td {
       border: 1px solid #ccc;
       padding: 8px;
+      text-align: center;
     }
     button {
       padding: 10px 20px;
@@ -54,6 +55,8 @@
   <h2>📷 Escaneie o código de barras</h2>
   <button onclick="ativarCamera()">Ativar câmera</button>
   <button onclick="desligarCamera()">Desligar câmera</button>
+  <button onclick="modoApagar()">Apagar códigos</button>
+  <button onclick="limparHistorico()">🧹 Limpar histórico</button>
 
   <div class="video-container">
     <video id="video" autoplay muted playsinline></video>
@@ -62,9 +65,11 @@
 
   <div id="erro"></div>
 
+  <p id="contador">📦 Total de códigos: 0</p>
+
   <table id="tabela">
     <thead>
-      <tr><th>Código</th><th>Ação</th></tr>
+      <tr><th>Selecionar</th><th>Código</th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -77,8 +82,21 @@
     const tabelaBody = document.querySelector('#tabela tbody');
     const erroDiv = document.getElementById('erro');
     const overlay = document.getElementById('overlay');
+    const contador = document.getElementById('contador');
     let codigos = [];
     let cameraAtiva = false;
+
+    // Carregar histórico salvo
+    window.onload = () => {
+      const salvos = JSON.parse(localStorage.getItem('codigosSalvos') || '[]');
+      salvos.forEach(codigo => {
+        if (!codigos.includes(codigo)) {
+          codigos.push(codigo);
+          adicionarLinha(codigo);
+        }
+      });
+      atualizarContador();
+    };
 
     function ativarCamera() {
       if (cameraAtiva) return;
@@ -88,31 +106,15 @@
           const codigo = result.text;
           if (!codigos.includes(codigo)) {
             codigos.push(codigo);
-            const linha = document.createElement('tr');
-
-            const celulaCodigo = document.createElement('td');
-            celulaCodigo.textContent = codigo;
-
-            const celulaBotao = document.createElement('td');
-            const botaoApagar = document.createElement('button');
-            botaoApagar.textContent = "🗑️ Apagar";
-            botaoApagar.onclick = () => {
-              codigos = codigos.filter(c => c !== codigo);
-              linha.remove();
-            };
-
-            celulaBotao.appendChild(botaoApagar);
-            linha.appendChild(celulaCodigo);
-            linha.appendChild(celulaBotao);
-            tabelaBody.appendChild(linha);
+            adicionarLinha(codigo);
+            salvarLocal();
+            atualizarContador();
           }
-
           overlay.style.borderColor = "green";
           setTimeout(() => {
             overlay.style.borderColor = "blue";
           }, 1000);
         }
-
         if (err && !(err instanceof ZXing.NotFoundException)) {
           erroDiv.textContent = "Erro ao acessar a câmera. Verifique as permissões.";
         }
@@ -129,6 +131,42 @@
       }
     }
 
+    function adicionarLinha(codigo) {
+      const linha = document.createElement('tr');
+
+      const celulaCheckbox = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = "checkbox";
+      checkbox.value = codigo;
+      celulaCheckbox.appendChild(checkbox);
+
+      const celulaCodigo = document.createElement('td');
+      celulaCodigo.textContent = codigo;
+
+      linha.appendChild(celulaCheckbox);
+      linha.appendChild(celulaCodigo);
+      tabelaBody.appendChild(linha);
+    }
+
+    function modoApagar() {
+      const checkboxes = tabelaBody.querySelectorAll('input[type="checkbox"]');
+      let apagados = 0;
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          const codigo = cb.value;
+          codigos = codigos.filter(c => c !== codigo);
+          cb.closest('tr').remove();
+          apagados++;
+        }
+      });
+      if (apagados > 0) {
+        salvarLocal();
+        atualizarContador();
+      } else {
+        alert("Marque os códigos que deseja apagar.");
+      }
+    }
+
     function baixarTXT() {
       let texto = codigos.join("\n");
       const blob = new Blob([texto], { type: 'text/plain;charset=utf-8;' });
@@ -136,6 +174,23 @@
       link.href = URL.createObjectURL(blob);
       link.download = 'codigos.txt';
       link.click();
+    }
+
+    function salvarLocal() {
+      localStorage.setItem('codigosSalvos', JSON.stringify(codigos));
+    }
+
+    function limparHistorico() {
+      if (confirm("Tem certeza que deseja apagar todos os códigos?")) {
+        codigos = [];
+        tabelaBody.innerHTML = '';
+        localStorage.removeItem('codigosSalvos');
+        atualizarContador();
+      }
+    }
+
+    function atualizarContador() {
+      contador.textContent = `📦 Total de códigos: ${codigos.length}`;
     }
   </script>
 </body>
